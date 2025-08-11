@@ -1,12 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import PlayerSetup from "@/components/PlayerSetup";
 import Game from "@/components/Game";
-import { useEffect, useState } from "react";
 
 export default function GamePage() {
   const [authed, setAuthed] = useState<boolean>(false);
+  const [checkedAuth, setCheckedAuth] = useState<boolean>(false); // optional: show nothing until we know
+  const [players, setPlayers] = useState<string[]>([]); // move above any early returns
 
   useEffect(() => {
     (async () => {
@@ -15,25 +16,30 @@ export default function GamePage() {
         setAuthed(r.ok);
       } catch {
         setAuthed(false);
+    } finally {
+        setCheckedAuth(true);
       }
     })();
   }, []);
 
-  if (!authed) {
-    return (
-      <div className="space-y-4">
-        <p>Please sign in with Spotify to play.</p>
-        <a className="rounded bg-emerald-600 text-white px-4 py-2" href="/api/auth/login">
-          Sign in with Spotify
-        </a>
-      </div>
-    );
+  if (!checkedAuth) {
+    return <div className="text-sm text-slate-500">Loading…</div>;
   }
 
-  const [players, setPlayers] = useState<string[]>([]);
-  return players.length === 0 ? (
-    <PlayerSetup onStart={(p) => setPlayers(p)} />
-  ) : (
-    <Game players={players} />
+  return (
+    <>
+      {!authed ? (
+        <div className="space-y-4">
+          <p>Please sign in with Spotify to play.</p>
+          <a className="rounded bg-emerald-600 text-white px-4 py-2" href="/api/auth/login">
+            Sign in with Spotify
+          </a>
+        </div>
+      ) : players.length === 0 ? (
+        <PlayerSetup onStart={(p) => setPlayers(p)} />
+      ) : (
+        <Game players={players} />
+      )}
+    </>
   );
 }
