@@ -10,9 +10,12 @@ export async function GET(req: Request) {
   const tab = (searchParams.get("tab") || "artist") as "artist"|"genre"|"playlist";
   try {
     if (tab === "artist") return NextResponse.json(await searchArtists(session, q));
-    if (tab === "playlist") return NextResponse.json(await searchPlaylists(session, q));
-    if (tab === "genre") return NextResponse.json(await listGenres(session, q));
-    return NextResponse.json([]);
+if (tab === "playlist") return NextResponse.json(await searchPlaylists(session, q)); // returns [{id,name}]
+if (tab === "genre") {
+  const genres = await listGenres(session, q);
+  // de-dup & sort a bit
+  const unique = Array.from(new Set(genres.map((g:string)=>g.toLowerCase()))).slice(0, 30);
+  return NextResponse.json(unique);
   } catch {
     return NextResponse.json([], { status: 200 });
   }
