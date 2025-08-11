@@ -6,19 +6,48 @@ export type SearchTarget =
   | { type: "genre"; name: string }
   | { type: "playlist"; id: string; name: string };
 
+type ArtistOrPlaylist = { id: string; name: string };
+
 export default function SearchBox({ onPick }: { onPick: (t: SearchTarget) => void }) {
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<"artist" | "genre" | "playlist">("artist");
-  const [results, setResults] = useState<any[]>([]);
+
+  // Keep separate result buckets per tab to avoid shape mismatch
+  const [artistResults, setArtistResults] = useState<ArtistOrPlaylist[]>([]);
+  const [playlistResults, setPlaylistResults] = useState<ArtistOrPlaylist[]>([]);
+  const [genreResults, setGenreResults] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Clear results when switching tabs (prevents stale render crash)
+  useEffect(() => {
+    setArtistResults([]);
+    setPlaylistResults([]);
+    setGenreResults([]);
+  }, [tab]);
 
   useEffect(() => {
     const t = setTimeout(async () => {
-      if (!q.trim()) { setResults([]); return; }
+      const query = q.trim();
+      if (!query) {
+        setArtistResults([]); setPlaylistResults([]); setGenreResults([]);
+        return;
+      }
       setLoading(true);
-      const r = await fetch(`/api/search?tab=${tab}&q=${encodeURIComponent(q)}`);
-      setResults(r.ok ? await r.json() : []);
-      setLoading(false);
+      try {
+        const r = await fetch(`/api/search?tab=${tab}&q=${encodeURIComponent(query)}`);
+        if (!r.ok) {
+          setArtistResults([]); setPlaylistResults([]); setGenreResults([]);
+        } else {
+          const data = await r.json();
+          if (tab === "artist") setArtistResults(Array.isArray(data) ? data : []);
+          if (tab === "playlist") setPlaylistResults(Array.isArray(data) ? data : []);
+          if (tab === "genre") setGenreResults(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        setArtistResults([]); setPlaylistResults([]); setGenreResults([]);
+      } finally {
+        setLoading(false);
+      }
     }, 250);
     return () => clearTimeout(t);
   }, [q, tab]);
@@ -26,28 +55,52 @@ export default function SearchBox({ onPick }: { onPick: (t: SearchTarget) => voi
   return (
     <div className="space-y-3">
       <div className="flex gap-2">
-        {(["artist", "genre", "playlist"] as const).map(t => (
+        {(["artist", "genre", "playlist"] as const).map(t =>
           <button key={t} onClick={() => setTab(t)}
             className={`rounded-full px-3 py-1 border ${tab===t ? "bg-black text-white" : "bg-white"}`}>
             {t}
           </button>
-        ))}
+        )}
       </div>
-      <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder={`Search ${tab}...`}
-        className="w-full rounded border px-3 py-2" />
+
+      <input
+        value={q}
+        onChange={(e)=>setQ(e.target.value)}
+        placeholder={`Search ${tab}...`}
+        className="w-full rounded border px-3 py-2"
+      />
+
       {loading && <div className="text-sm text-slate-500">Searching…</div>}
+
       <ul className="divide-y rounded border bg-white">
-        {results.map((r, i) => (
-          <li key={i} className="p-3 hover:bg-slate-50 cursor-pointer"
-            onClick={()=>{
-              if (tab==="artist") onPick({ type:"artist", id:r.id, name:r.name });
-              if (tab==="playlist") onPick({ type:"playlist", id:r.id, name:r.name });
-              if (tab==="genre") onPick({ type:"genre", name:r } as any);
-            }}>
-            {tab==="genre" ? r : r.name}
+        {tab === "artist" && artistResults.map((r) => (
+          <li key={r.id} className="p-3 hover:bg-slate-50 cursor-pointer"
+              onClick={() => onPick({ type:"artist", id:r.id, name:r.name })}>
+            {r.name}
           </li>
         ))}
-        {results.length===0 && q && !loading && <li className="p-3 text-sm text-slate-500">No results.</li>}
+        {tab === "playlist" && playlistResults.map((r) => (
+          <li key={r.id} className="p-3 hover:bg-slate-50 cursor-pointer"
+              onClick={() => onPick({ type:"playlist", id:r.id, name:r.name })}>
+            {r.name}
+          </li>
+        ))}
+        {tab === "genre" && genreResults.map((g) => (
+          <li key={g} className="p-3 hover:bg-slate-50 cursor-pointer"
+              onClick={() => onPick({ type:"genre", name:g })}>
+            {g}
+          </li>
+        ))}
+
+        {!loading && q && (
+          (tab==="artist" && artistResults.length===0) ||
+          (tab==="playlist" && playlistResults.length===0) ||
+          (tab==="genre" && genreResults.length===0)
+        ) && (
+          <li className="p-3 text-sm text-slate-500">
+            No results{tab==="genre" ? " (tip: try seeds like pop, rock, hip-hop, metal, edm, country, jazz…)" : ""}.
+          </li>
+        )}
       </ul>
     </div>
   );
