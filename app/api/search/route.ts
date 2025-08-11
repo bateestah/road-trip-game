@@ -1,35 +1,50 @@
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
-import { getSessionCookie } from "@/lib/cookies";
+import { getFreshSession } from "@/lib/session";
 import { listGenres, searchArtists, searchPlaylists } from "@/lib/spotify";
 
 export async function GET(req: Request) {
-  const session = getSessionCookie();
+  const session = await getFreshSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") || "";
   const tab = (searchParams.get("tab") || "artist") as "artist" | "genre" | "playlist";
+  const debug = searchParams.get("debug") === "1";
 
   try {
     if (tab === "artist") {
       const data = await searchArtists(session, q);
       return NextResponse.json(data);
     }
-
     if (tab === "playlist") {
-      const data = await searchPlaylists(session, q); // [{ id, name }]
+      const data = await searchPlaylists(session, q);
       return NextResponse.json(data);
     }
-
     if (tab === "genre") {
-      const genres = await listGenres(session, q); // string[]
-      // de‑dup, normalize, cap at 30
-      const unique = Array.from(new Set((genres ?? []).map((g: string) => g.toLowerCase()))).slice(0, 30);
+      const genres = await listGenres(session, q); // Spotify seed genres
+      const norm = (s: string) => s.toLowerCase().replace(/\s+/g, "-");
+      const needle = norm(q);
+      const pool = (genres ?? []).map(norm);
+
+      const starters = [
+        "pop","rock","hip-hop","r-n-b","edm","indie","country",
+        "jazz","classical","metal","soul","punk","blues","reggae","latin"
+      ];
+
+      const out = (needle && needle.length >= 2)
+        ? pool.filter(g => g.includes(needle))
+        : starters.filter(s => pool.includes(s));
+
+      const unique = Array.from(new Set(out)).slice(0, 30);
       return NextResponse.json(unique);
     }
 
     return NextResponse.json([]);
-  } catch {
+  } catch (e: any) {
+    if (debug) {
+      return NextResponse.json({ error: "search_failed", message: String(e?.message || e) }, { status: 500 });
+    }
     return NextResponse.json([], { status: 200 });
   }
 }
