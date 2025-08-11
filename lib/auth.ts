@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import * as jose from "jose";
+import { randomBytes, createHash } from "crypto";
 
 const CODE_VERIFIER_COOKIE = "trsg_pkce_verifier";
 const CSRF_COOKIE = "trsg_csrf";
@@ -10,10 +10,15 @@ const SPOTIFY_TOKEN = "https://accounts.spotify.com/api/token";
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID!;
 const REDIRECT_URI = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback`;
 
+function b64url(buf: Buffer | string) {
+  const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
+  return b.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
 export async function beginAuth() {
-  const verifier = jose.base64url.encode(jose.randomBytes(32));
-  const challenge = await jose.calculatePKCECodeChallenge(verifier);
-  const state = jose.base64url.encode(jose.randomBytes(16));
+  const verifier = b64url(randomBytes(32));
+  const challenge = b64url(createHash("sha256").update(verifier).digest());
+  const state = b64url(randomBytes(16));
 
   const c = cookies();
   c.set(CODE_VERIFIER_COOKIE, verifier, { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 600 });
@@ -43,7 +48,7 @@ export async function beginAuth() {
 export async function finishAuth(code: string, state: string) {
   const c = cookies();
   const verifier = c.get(CODE_VERIFIER_COOKIE)?.value;
-  const expectedState = c.get("trsg_csrf")?.value;
+  const expectedState = c.get(CSRF_COOKIE)?.value;
   if (!verifier || !expectedState || state !== expectedState) throw new Error("Bad CSRF or verifier");
 
   const body = new URLSearchParams({
@@ -96,3 +101,4 @@ export async function refreshToken(refresh_token: string) {
     expires_at: Math.floor(Date.now()/1000) + tok.expires_in
   };
 }
+
