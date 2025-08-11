@@ -21,24 +21,37 @@ export async function GET(req: Request) {
       const data = await searchPlaylists(session, q);
       return NextResponse.json(data);
     }
-    if (tab === "genre") {
-      const genres = await listGenres(session, q); // Spotify seed genres
-      const norm = (s: string) => s.toLowerCase().replace(/\s+/g, "-");
-      const needle = norm(q);
-      const pool = (genres ?? []).map(norm);
+   if (tab === "genre") {
+  // Try Spotify's seeds; if it fails, use a fallback list.
+  let seeds: string[] = [];
+  try {
+    seeds = await listGenres(session, q); // string[]
+  } catch {
+    seeds = [
+      "pop","rock","hip-hop","r-n-b","edm","indie","country","jazz","classical",
+      "metal","soul","punk","blues","reggae","latin","folk","dance","house",
+      "techno","ambient","trap","k-pop","j-pop","afrobeats","disco","funk","lo-fi"
+    ];
+  }
 
-      const starters = [
-        "pop","rock","hip-hop","r-n-b","edm","indie","country",
-        "jazz","classical","metal","soul","punk","blues","reggae","latin"
-      ];
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, "-");
+  const needle = norm(q);
+  const pool = (seeds ?? []).map(norm);
 
-      const out = (needle && needle.length >= 2)
-        ? pool.filter(g => g.includes(needle))
-        : starters.filter(s => pool.includes(s));
+  // Show filtered matches when user types; otherwise show a friendly starter set present in pool
+  const starters = [
+    "pop","rock","hip-hop","r-n-b","edm","indie","country",
+    "jazz","classical","metal","soul","punk","blues","reggae","latin"
+  ];
 
-      const unique = Array.from(new Set(out)).slice(0, 30);
-      return NextResponse.json(unique);
-    }
+  const out = (needle && needle.length >= 2)
+    ? pool.filter(g => g.includes(needle))
+    : starters.filter(s => pool.includes(s));
+
+  const unique = Array.from(new Set(out)).slice(0, 30);
+  return NextResponse.json(unique);
+}
+
 
     return NextResponse.json([]);
   } catch (e: any) {
