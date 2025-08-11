@@ -16,8 +16,10 @@ export async function searchArtists(token: SpotifyToken, q: string) {
 
 export async function searchPlaylists(token: SpotifyToken, q: string) {
   const res = await sp<any>(token, "search", { q, type: "playlist", limit: "20", market: "US" });
-  return res.playlists.items.map((p:any)=>({ id:p.id, name:p.name }));
+  const items = (res.playlists?.items ?? []).filter((p: any) => p && p.id && p.name);
+  return items.map((p: any) => ({ id: p.id, name: p.name }));
 }
+
 
 
 export async function listGenres(token: SpotifyToken, q: string) {
