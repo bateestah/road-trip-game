@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { getSessionCookie } from "@/lib/cookies";
+import { getFreshSession } from "@/lib/session";
 import { randomTrackByArtist, randomTrackByGenre, randomTrackFromPlaylist } from "@/lib/spotify";
 
 export async function POST(req: Request) {
-  const session = getSessionCookie();
+  const session = await getFreshSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const body = await req.json();
 
@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     if (body.type === "playlist") track = await randomTrackFromPlaylist(session, body.id);
 
     return NextResponse.json(track ?? null);
-  } catch {
+  } catch (e) {
     return NextResponse.json(null, { status: 200 });
   }
 }
