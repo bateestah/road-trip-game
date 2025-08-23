@@ -81,52 +81,70 @@ export default function SearchBox({ onPick }: { onPick: (t: SearchTarget) => voi
   return (
     <div className="space-y-3">
       <div className="flex gap-2">
-        {(["artist", "genre", "playlist"] as const).map(t =>
-          <button key={t} onClick={() => setTab(t)}
-            className={`rounded-full px-3 py-1 border ${tab===t ? "bg-black text-white" : "bg-white"}`}>
+        {(["artist", "genre", "playlist"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`rounded-full px-3 py-1 border border-gray-600 ${tab === t ? "bg-gray-700 text-white" : "bg-gray-800 text-gray-200"}`}
+          >
             {t}
           </button>
-        )}
+        ))}
       </div>
 
       <input
         value={q}
-        onChange={(e)=>setQ(e.target.value)}
+        onChange={(e) => setQ(e.target.value)}
         placeholder={tab === "playlist" ? "Search or paste playlist link..." : `Search ${tab}...`}
-        className="w-full rounded border px-3 py-2"
+        className="w-full rounded border border-gray-600 bg-gray-900 px-3 py-2 text-gray-100"
       />
 
-      {loading && <div className="text-sm text-slate-500">Searching…</div>}
+      {loading && <div className="text-sm text-gray-400">Searching…</div>}
 
-      <ul className="divide-y rounded border bg-white">
-        {tab === "artist" && artistResults.map((r) => (
-          <li key={r.id} className="p-3 hover:bg-slate-50 cursor-pointer"
-              onClick={() => onPick({ type:"artist", id:r.id, name:r.name })}>
-            {r.name}
-          </li>
-        ))}
-        {tab === "playlist" && playlistResults.map((r) => (
-          <li key={r.id} className="p-3 hover:bg-slate-50 cursor-pointer"
-              onClick={() => onPick({ type:"playlist", id:r.id, name:r.name })}>
-            {r.name}
-          </li>
-        ))}
-        {tab === "genre" && genreResults.map((g) => (
-          <li key={g} className="p-3 hover:bg-slate-50 cursor-pointer"
-              onClick={() => onPick({ type:"genre", name:g })}>
-            {g}
-          </li>
-        ))}
+      <ul className="divide-y divide-gray-700 rounded border border-gray-700 bg-gray-800">
+        {tab === "artist" &&
+          artistResults.map((r) => (
+            <li
+              key={r.id}
+              className="p-3 hover:bg-gray-700 cursor-pointer"
+              onClick={() => onPick({ type: "artist", id: r.id, name: r.name })}
+            >
+              {r.name}
+            </li>
+          ))}
+        {tab === "playlist" &&
+          playlistResults.map((r) => (
+            <li
+              key={r.id}
+              className="p-3 hover:bg-gray-700 cursor-pointer"
+              onClick={() => onPick({ type: "playlist", id: r.id, name: r.name })}
+            >
+              {r.name}
+            </li>
+          ))}
+        {tab === "genre" &&
+          genreResults.map((g) => (
+            <li
+              key={g}
+              className="p-3 hover:bg-gray-700 cursor-pointer"
+              onClick={() => onPick({ type: "genre", name: g })}
+            >
+              {g}
+            </li>
+          ))}
 
-        {!loading && q && (
-          (tab==="artist" && artistResults.length===0) ||
-          (tab==="playlist" && playlistResults.length===0) ||
-          (tab==="genre" && genreResults.length===0)
-        ) && (
-          <li className="p-3 text-sm text-slate-500">
-            No results{tab==="genre" ? " (tip: try seeds like pop, rock, hip-hop, metal, edm, country, jazz…)" : ""}.
-          </li>
-        )}
+        {!loading &&
+          q &&
+          ((tab === "artist" && artistResults.length === 0) ||
+            (tab === "playlist" && playlistResults.length === 0) ||
+            (tab === "genre" && genreResults.length === 0)) && (
+            <li className="p-3 text-sm text-gray-400">
+              No results
+              {tab === "genre"
+                ? " (tip: try seeds like pop, rock, hip-hop, metal, edm, country, jazz…)"
+                : ""}.
+            </li>
+          )}
       </ul>
     </div>
   );

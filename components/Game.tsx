@@ -120,16 +120,16 @@ export default function Game({ players }: { players: string[] }) {
     <div className="space-y-6">
       <Scoreboard players={players} scores={scores} currentIndex={turnIndex} />
 
-      <div className="rounded border bg-white p-4 space-y-4">
+      <div className="rounded border border-gray-700 bg-gray-800 p-4 space-y-4">
         <h3 className="font-semibold">Pick an artist, genre, or playlist (paste a link)</h3>
         <SearchBox onPick={setTarget} />
       </div>
 
       {target && (
-        <div className="rounded border bg-white p-4 space-y-4">
+        <div className="rounded border border-gray-700 bg-gray-800 p-4 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm text-slate-600">
+              <div className="text-sm text-gray-300">
                 Round for: <b>{players[turnIndex]}</b>
               </div>
               <div className="text-xs">
@@ -144,18 +144,18 @@ export default function Game({ players }: { players: string[] }) {
               </div>
             </div>
             <div className="flex gap-2">
-              <button className="rounded border px-3 py-1" onClick={loadRandom}>
+              <button className="rounded border border-gray-600 px-3 py-1 text-gray-100" onClick={loadRandom}>
                 New random
               </button>
               <button
-                className="rounded bg-black text-white px-3 py-1"
+                className="rounded bg-emerald-600 text-white px-3 py-1"
                 onClick={playInitial}
                 disabled={!current?.uri || !ready}
               >
                 Play 1s
               </button>
               <button
-                className="rounded bg-slate-800 text-white px-3 py-1"
+                className="rounded bg-gray-700 text-white px-3 py-1"
                 onClick={extendFive}
                 disabled={!current?.uri || !ready || extended}
               >
@@ -164,26 +164,26 @@ export default function Game({ players }: { players: string[] }) {
             </div>
           </div>
 
-          {!current && <div className="text-sm text-slate-500">No track found. Try again.</div>}
+          {!current && <div className="text-sm text-gray-400">No track found. Try again.</div>}
 
           {current && (
             <>
               <div className="flex items-center gap-3">
                 {current.artwork && <img src={current.artwork} alt="" className="h-16 w-16 rounded" />}
-                <div className="text-sm text-slate-600">
+                <div className="text-sm text-gray-300">
                   Guess the <b>artist</b> and <b>song</b> name.
                 </div>
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <input
-                  className="rounded border px-3 py-2"
+                  className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-gray-100"
                   placeholder="Artist"
                   value={guessArtist}
                   onChange={(e) => setGuessArtist(e.target.value)}
                 />
                 <input
-                  className="rounded border px-3 py-2"
+                  className="rounded border border-gray-600 bg-gray-900 px-3 py-2 text-gray-100"
                   placeholder="Song"
                   value={guessSong}
                   onChange={(e) => setGuessSong(e.target.value)}
@@ -197,7 +197,7 @@ export default function Game({ players }: { players: string[] }) {
 
                 {revealed && (
                   <button
-                    className="rounded border px-3 py-2"
+                    className="rounded border border-gray-600 px-3 py-2 text-gray-100"
                     onClick={async () => {
                       setGuessArtist("");
                       setGuessSong("");
@@ -213,7 +213,7 @@ export default function Game({ players }: { players: string[] }) {
                 )}
 
                 {current.external_url && (
-                  <a className="ml-auto text-sm underline" href={current.external_url} target="_blank">
+                  <a className="ml-auto text-sm text-emerald-400 underline" href={current.external_url} target="_blank">
                     Open in Spotify
                   </a>
                 )}
@@ -221,14 +221,14 @@ export default function Game({ players }: { players: string[] }) {
 
               {/* Wrong banner */}
               {revealed && result === "wrong" && (
-                <div className="rounded border border-red-200 bg-red-50 p-3 text-red-700">
+                <div className="rounded border border-red-700 bg-red-900 p-3 text-red-100">
                   <div className="font-semibold">WRONG</div>
                 </div>
               )}
 
               {/* Always show the answer once revealed */}
               {revealed && (
-                <div className="rounded bg-emerald-50 border border-emerald-200 p-3">
+                <div className="rounded bg-emerald-900 border border-emerald-700 p-3 text-emerald-100">
                   <div className="font-medium">Answer</div>
                   <div className="text-sm">
                     {current.artists.join(", ")} — {current.name}
