@@ -66,7 +66,7 @@ export default function SearchBox({ onPick }: { onPick: (t: SearchTarget) => voi
       <input
         value={q}
         onChange={(e)=>setQ(e.target.value)}
-        placeholder={`Search ${tab}...`}
+        placeholder={tab === "playlist" ? "Search playlist or paste link..." : `Search ${tab}...`}
         className="w-full rounded border px-3 py-2"
       />
 

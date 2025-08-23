@@ -15,6 +15,29 @@ export async function searchArtists(token: SpotifyToken, q: string) {
 }
 
 export async function searchPlaylists(token: SpotifyToken, q: string) {
+  let id: string | null = null;
+  try {
+    const url = new URL(q);
+    if (url.hostname.includes("spotify") && url.pathname.startsWith("/playlist/")) {
+      id = url.pathname.split("/")[2];
+    }
+  } catch {
+    // not a URL
+  }
+  if (!id) {
+    const m = q.match(/spotify:playlist:([A-Za-z0-9]+)/);
+    if (m) id = m[1];
+  }
+  if (!id && /^[A-Za-z0-9]{22}$/.test(q)) id = q;
+  if (id) {
+    try {
+      const p = await sp<any>(token, `playlists/${id}`);
+      if (p && p.id && p.name) return [{ id: p.id, name: p.name }];
+      return [];
+    } catch {
+      return [];
+    }
+  }
   const res = await sp<any>(token, "search", { q, type: "playlist", limit: "20", market: "US" });
   const items = (res.playlists?.items ?? []).filter((p: any) => p && p.id && p.name);
   return items.map((p: any) => ({ id: p.id, name: p.name }));
