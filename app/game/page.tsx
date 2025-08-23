@@ -23,7 +23,7 @@ export default function GamePage() {
   }, []);
 
   if (!checkedAuth) {
-    return <div className="text-sm text-slate-500">Loading…</div>;
+    return <div className="text-sm text-gray-400">Loading…</div>;
   }
 
   return (
