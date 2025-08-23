@@ -8,6 +8,11 @@ export type SearchTarget =
 
 type ArtistOrPlaylist = { id: string; name: string };
 
+function extractPlaylistId(input: string): string | null {
+  const urlMatch = input.match(/playlist[/:]([a-zA-Z0-9]+)/);
+  return urlMatch ? urlMatch[1] : null;
+}
+
 export default function SearchBox({ onPick }: { onPick: (t: SearchTarget) => void }) {
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<"artist" | "genre" | "playlist">("artist");
@@ -32,6 +37,27 @@ export default function SearchBox({ onPick }: { onPick: (t: SearchTarget) => voi
         setArtistResults([]); setPlaylistResults([]); setGenreResults([]);
         return;
       }
+      if (tab === "playlist") {
+        const id = extractPlaylistId(query);
+        if (id) {
+          setLoading(true);
+          try {
+            const r = await fetch(`/api/playlist?id=${encodeURIComponent(id)}`);
+            if (r.ok) {
+              const data = await r.json();
+              setPlaylistResults(data ? [data] : []);
+            } else {
+              setPlaylistResults([]);
+            }
+          } catch {
+            setPlaylistResults([]);
+          } finally {
+            setLoading(false);
+          }
+          return;
+        }
+      }
+
       setLoading(true);
       try {
         const r = await fetch(`/api/search?tab=${tab}&q=${encodeURIComponent(query)}`);
@@ -66,7 +92,7 @@ export default function SearchBox({ onPick }: { onPick: (t: SearchTarget) => voi
       <input
         value={q}
         onChange={(e)=>setQ(e.target.value)}
-        placeholder={`Search ${tab}...`}
+        placeholder={tab === "playlist" ? "Search or paste playlist link..." : `Search ${tab}...`}
         className="w-full rounded border px-3 py-2"
       />
 
