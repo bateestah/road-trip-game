@@ -19,33 +19,21 @@ export default function PlayerSetup({ onStart }: { onStart: (players: string[]) 
     <div className="space-y-4">
       <h2 className="font-semibold text-lg">Players</h2>
       <label className="block">
-        <span className="text-sm dark:text-slate-300">Number of players (1–4)</span>
-        <input
-          type="number"
-          min={1}
-          max={4}
-          value={count}
+        <span className="text-sm">Number of players (1–4)</span>
+        <input type="number" min={1} max={4} value={count}
           onChange={(e) => updateCount(parseInt(e.target.value))}
-          className="mt-1 w-28 rounded border px-2 py-1 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
-        />
+          className="mt-1 w-28 rounded border px-2 py-1" />
       </label>
       <div className="grid gap-2">
         {Array.from({ length: count }).map((_, i) => (
-          <input
-            key={i}
-            className="rounded border px-2 py-1 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
-            value={names[i]}
-            onChange={(e) => {
+          <input key={i} className="rounded border px-2 py-1"
+            value={names[i]} onChange={(e) => {
               const v = e.target.value || `Player ${i + 1}`;
-              setNames((prev) => prev.map((p, idx) => (idx === i ? v : p)));
-            }}
-          />
+              setNames((prev) => prev.map((p, idx) => idx === i ? v : p));
+            }} />
         ))}
       </div>
-      <button
-        onClick={() => onStart(names)}
-        className="rounded bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700"
-      >
+      <button onClick={() => onStart(names)} className="rounded bg-black text-white px-4 py-2">
         Start game
       </button>
     </div>

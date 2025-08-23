@@ -11,10 +11,7 @@ export default function Home() {
         <li>Tap “I don’t know” to reveal +5 seconds.</li>
         <li>1–4 players. Points: 1 for artist, 1 for song.</li>
       </ul>
-      <Link
-        href="/game"
-        className="inline-block rounded bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700"
-      >
+      <Link href="/game" className="inline-block rounded bg-black text-white px-4 py-2">
         Start playing
       </Link>
     </div>
