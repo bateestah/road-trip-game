@@ -1,6 +1,6 @@
 # The road-trip song game
 
-Guess the song with Spotify (Premium). The game plays from **0s → pauses at 1s**. Tap **“I don’t know”** to resume **+5s**. Supports **1–4 players**, rotating turns, and **1 point each** for correct artist and song.
+Guess the song with Spotify (Premium). The game plays from **0s → pauses at 1s**. Tap **“I don’t know”** to resume **+5s**. Supports **1–4 players**, rotating turns, and **1 point each** for correct artist and song. Search for an artist, genre, or playlist—or paste a playlist link.
 
 ## One‑click deploy (Vercel)
 
