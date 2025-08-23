@@ -121,7 +121,7 @@ export default function Game({ players }: { players: string[] }) {
       <Scoreboard players={players} scores={scores} currentIndex={turnIndex} />
 
       <div className="rounded border bg-white p-4 space-y-4">
-        <h3 className="font-semibold">Pick an artist, genre, or playlist</h3>
+        <h3 className="font-semibold">Pick an artist, genre, or playlist (paste a link)</h3>
         <SearchBox onPick={setTarget} />
       </div>
 

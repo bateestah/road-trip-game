@@ -4,7 +4,7 @@ export default function Home() {
   return (
     <div className="space-y-6">
       <p className="text-lg">
-        Sign in with your Spotify account, pick an artist, genre, or playlist, and guess the song.
+        Sign in with your Spotify account, pick an artist, genre, or playlist link, and guess the song.
       </p>
       <ul className="list-disc pl-5 space-y-2">
         <li>Round starts with a 1‑second clip (from the song start).</li>

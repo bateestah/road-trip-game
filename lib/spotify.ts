@@ -20,6 +20,11 @@ export async function searchPlaylists(token: SpotifyToken, q: string) {
   return items.map((p: any) => ({ id: p.id, name: p.name }));
 }
 
+export async function getPlaylist(token: SpotifyToken, id: string) {
+  const res = await sp<any>(token, `playlists/${id}`, { market: "US" });
+  return { id: res.id, name: res.name };
+}
+
 
 
 export async function listGenres(token: SpotifyToken, q: string) {
