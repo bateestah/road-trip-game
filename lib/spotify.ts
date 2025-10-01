@@ -60,8 +60,17 @@ export async function randomTrackFromPlaylist(token: SpotifyToken, playlistId: s
 }
 
 function pickAnyPlayable(tracks: any[]) {
-  const ordered = shuffle(tracks ?? []);
-  const t = ordered.find((x:any)=> x && (x.type === "track" || x.uri)) || ordered[0];
+  const ordered = shuffle(
+    (tracks ?? []).filter((t: any) => {
+      if (!t) return false;
+      if (t.type !== "track") return false;
+      if (!t.uri) return false;
+      if (t.is_playable === false) return false;
+      if (t.is_local) return false;
+      return true;
+    })
+  );
+  const t = ordered[0];
   if (!t) return null;
   const artwork = t.album?.images?.[1]?.url ?? t.album?.images?.[0]?.url ?? null;
   return {
