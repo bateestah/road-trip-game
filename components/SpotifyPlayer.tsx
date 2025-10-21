@@ -17,7 +17,7 @@ export default function useSpotifyDevice() {
     if (!r.ok) throw new Error("no token");
     const { access_token } = await r.json();
     return access_token;
-  }, []);
+    }, []);
 
   useEffect(() => {
     const id = "spotify-player";
@@ -95,11 +95,6 @@ export default function useSpotifyDevice() {
   }, [deviceId]);
 
   const resume = useCallback(async () => {
-    if (playerRef.current?.resume) {
-      await playerRef.current.resume();
-      return;
-    }
-
     if (!deviceId) return;
     await fetch("/api/play", {
       method: "POST",
@@ -109,10 +104,6 @@ export default function useSpotifyDevice() {
   }, [deviceId]);
 
   const pause = useCallback(async () => {
-    if (playerRef.current?.pause) {
-      await playerRef.current.pause();
-    }
-
     if (!deviceId) return;
     await fetch("/api/pause", {
       method: "POST",
