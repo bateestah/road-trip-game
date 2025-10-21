@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import SearchBox, { SearchTarget } from "./SearchBox";
 import Scoreboard from "./Scoreboard";
 import useSpotifyDevice from "./SpotifyPlayer";
@@ -25,8 +25,9 @@ export default function Game({ players }: { players: string[] }) {
   const [result, setResult] = useState<null | "correct" | "wrong">(null);
   const [lastTrackId, setLastTrackId] = useState<string | null>(null);
 
-  const { ready, activate, playUriAt, resume, pause } = useSpotifyDevice();
+  const { ready, activate, playUriAt, resume, pause, waitForPlaybackStart } = useSpotifyDevice();
   const [sdkActivated, setSdkActivated] = useState(false);
+  const pauseTimeoutRef = useRef<number | null>(null);
 
   const nextTurn = () => setTurnIndex((i) => (i + 1) % players.length);
 
@@ -44,8 +45,18 @@ export default function Game({ players }: { players: string[] }) {
     }
   }
 
+  const clearPauseTimeout = useCallback(() => {
+    if (pauseTimeoutRef.current !== null) {
+      window.clearTimeout(pauseTimeoutRef.current);
+      pauseTimeoutRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => clearPauseTimeout(), [clearPauseTimeout]);
+
   async function loadRandom() {
     if (!target) return;
+    clearPauseTimeout();
     setRevealed(false);
     setExtended(false);
     setGuessArtist("");
@@ -78,8 +89,11 @@ export default function Game({ players }: { players: string[] }) {
     if (!current?.uri || !ready) return;
     await ensureActivated();
     await playUriAt(current.uri, 0);
-    setTimeout(() => {
-      pause();
+    clearPauseTimeout();
+    await waitForPlaybackStart(current.uri);
+    pauseTimeoutRef.current = window.setTimeout(async () => {
+      await pause();
+      pauseTimeoutRef.current = null;
     }, 1000);
   }
 
@@ -87,9 +101,12 @@ export default function Game({ players }: { players: string[] }) {
     if (!current?.uri || !ready) return;
     await ensureActivated();
     await resume();
+    clearPauseTimeout();
+    await waitForPlaybackStart(current.uri);
     setExtended(true);
-    setTimeout(() => {
-      pause();
+    pauseTimeoutRef.current = window.setTimeout(async () => {
+      await pause();
+      pauseTimeoutRef.current = null;
     }, 5000);
   }
 
