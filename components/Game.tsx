@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import SearchBox, { SearchTarget } from "./SearchBox";
 import Scoreboard from "./Scoreboard";
 import useSpotifyDevice from "./SpotifyPlayer";
@@ -25,8 +25,10 @@ export default function Game({ players }: { players: string[] }) {
   const [result, setResult] = useState<null | "correct" | "wrong">(null);
   const [lastTrackId, setLastTrackId] = useState<string | null>(null);
 
-  const { ready, activate, playUriAt, resume, pause } = useSpotifyDevice();
+  const { ready, activate, playUriAt, resume, pause, waitForPlaybackStart } = useSpotifyDevice();
   const [sdkActivated, setSdkActivated] = useState(false);
+  const pauseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playbackWaitAbortRef = useRef<AbortController | null>(null);
 
   const nextTurn = () => setTurnIndex((i) => (i + 1) % players.length);
 
@@ -37,6 +39,26 @@ export default function Game({ players }: { players: string[] }) {
   const [guessArtist, setGuessArtist] = useState("");
   const [guessSong, setGuessSong] = useState("");
 
+  useEffect(() => {
+    return () => {
+      if (playbackWaitAbortRef.current) {
+        playbackWaitAbortRef.current.abort();
+        playbackWaitAbortRef.current = null;
+      }
+      if (pauseTimeoutRef.current !== null) {
+        clearTimeout(pauseTimeoutRef.current);
+        pauseTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  function cancelPlaybackWait() {
+    if (playbackWaitAbortRef.current) {
+      playbackWaitAbortRef.current.abort();
+      playbackWaitAbortRef.current = null;
+    }
+  }
+
   async function ensureActivated() {
     if (!sdkActivated) {
       await activate();
@@ -46,6 +68,11 @@ export default function Game({ players }: { players: string[] }) {
 
   async function loadRandom() {
     if (!target) return;
+    cancelPlaybackWait();
+    if (pauseTimeoutRef.current !== null) {
+      clearTimeout(pauseTimeoutRef.current);
+      pauseTimeoutRef.current = null;
+    }
     setRevealed(false);
     setExtended(false);
     setGuessArtist("");
@@ -76,20 +103,68 @@ export default function Game({ players }: { players: string[] }) {
 
   async function playInitial() {
     if (!current?.uri || !ready) return;
+    const trackUri = current.uri;
     await ensureActivated();
-    await playUriAt(current.uri, 0);
-    setTimeout(() => {
+    await playUriAt(trackUri, 0);
+    cancelPlaybackWait();
+    if (pauseTimeoutRef.current !== null) {
+      clearTimeout(pauseTimeoutRef.current);
+      pauseTimeoutRef.current = null;
+    }
+    const controller = new AbortController();
+    playbackWaitAbortRef.current = controller;
+    try {
+      await waitForPlaybackStart({
+        predicate: (state) => state?.track_window?.current_track?.uri === trackUri,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (controller.signal.aborted || (err instanceof Error && err.name === "AbortError")) {
+        return;
+      }
+      throw err;
+    } finally {
+      if (playbackWaitAbortRef.current === controller) {
+        playbackWaitAbortRef.current = null;
+      }
+    }
+    pauseTimeoutRef.current = setTimeout(() => {
       pause();
+      pauseTimeoutRef.current = null;
     }, 1000);
   }
 
   async function extendFive() {
     if (!current?.uri || !ready) return;
+    const trackUri = current.uri;
     await ensureActivated();
     await resume();
     setExtended(true);
-    setTimeout(() => {
+    cancelPlaybackWait();
+    if (pauseTimeoutRef.current !== null) {
+      clearTimeout(pauseTimeoutRef.current);
+      pauseTimeoutRef.current = null;
+    }
+    const controller = new AbortController();
+    playbackWaitAbortRef.current = controller;
+    try {
+      await waitForPlaybackStart({
+        predicate: (state) => state?.track_window?.current_track?.uri === trackUri,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (controller.signal.aborted || (err instanceof Error && err.name === "AbortError")) {
+        return;
+      }
+      throw err;
+    } finally {
+      if (playbackWaitAbortRef.current === controller) {
+        playbackWaitAbortRef.current = null;
+      }
+    }
+    pauseTimeoutRef.current = setTimeout(() => {
       pause();
+      pauseTimeoutRef.current = null;
     }, 5000);
   }
 
