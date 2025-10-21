@@ -10,14 +10,6 @@ export default function useSpotifyDevice() {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const playerRef = useRef<any>(null);
-  type PlaybackStartResolver = {
-    resolve: () => void;
-    predicate?: (state: any) => boolean;
-    cleanup?: () => void;
-  };
-  const playbackStartResolvers = useRef<PlaybackStartResolver[]>([]);
-  const lastPlayerStateRef = useRef<any>(null);
-  const stateChangeListenerRef = useRef<((state: any) => void) | null>(null);
 
   const getToken = useCallback(async (): Promise<string> => {
     const r = await fetch("/api/auth/token", { cache: "no-store" });
@@ -45,22 +37,6 @@ export default function useSpotifyDevice() {
       });
       playerRef.current = player;
 
-      const handleStateChange = (state: any) => {
-        lastPlayerStateRef.current = state;
-        if (state && state.paused === false && playbackStartResolvers.current.length) {
-          const remaining: PlaybackStartResolver[] = [];
-          playbackStartResolvers.current.forEach((entry) => {
-            if (!entry.predicate || entry.predicate(state)) {
-              entry.resolve();
-            } else {
-              remaining.push(entry);
-            }
-          });
-          playbackStartResolvers.current = remaining;
-        }
-      };
-      stateChangeListenerRef.current = handleStateChange;
-
       player.addListener("ready", ({ device_id }: { device_id: string }) => {
         setDeviceId(device_id);
         setReady(true);
@@ -75,20 +51,11 @@ export default function useSpotifyDevice() {
       player.addListener("initialization_error", ({ message }: any) => console.error(message));
       player.addListener("authentication_error", ({ message }: any) => console.error(message));
       player.addListener("account_error", ({ message }: any) => console.error(message));
-      player.addListener("player_state_changed", handleStateChange);
 
       await player.connect();
     };
 
-    return () => {
-      playbackStartResolvers.current.forEach((entry) => entry.cleanup?.());
-      playbackStartResolvers.current = [];
-      if (stateChangeListenerRef.current) {
-        playerRef.current?.removeListener("player_state_changed", stateChangeListenerRef.current);
-        stateChangeListenerRef.current = null;
-      }
-      playerRef.current?.disconnect?.();
-    };
+    return () => { playerRef.current?.disconnect?.(); };
   }, [getToken]);
 
   const playUriAt = useCallback(async (uri: string, position_ms: number) => {
@@ -122,51 +89,5 @@ export default function useSpotifyDevice() {
     await playerRef.current?.activateElement?.();
   }, []);
 
-  const waitForPlaybackStart = useCallback(
-    async ({ predicate, signal }: { predicate?: (state: any) => boolean; signal?: AbortSignal } = {}) => {
-      return new Promise<void>((resolve, reject) => {
-        const entry: PlaybackStartResolver = { resolve: () => {}, predicate };
-
-        const cleanup = () => {
-          playbackStartResolvers.current = playbackStartResolvers.current.filter((item) => item !== entry);
-          if (signal) {
-            signal.removeEventListener("abort", onAbort);
-          }
-        };
-
-        const onAbort = () => {
-          cleanup();
-          const error = new Error("playback_wait_aborted");
-          (error as any).name = "AbortError";
-          reject(error);
-        };
-
-        entry.cleanup = cleanup;
-        entry.resolve = () => {
-          cleanup();
-          resolve();
-        };
-
-        if (signal?.aborted) {
-          onAbort();
-          return;
-        }
-
-        const lastState = lastPlayerStateRef.current;
-        if (lastState && lastState.paused === false && (!predicate || predicate(lastState))) {
-          entry.resolve();
-          return;
-        }
-
-        playbackStartResolvers.current.push(entry);
-
-        if (signal) {
-          signal.addEventListener("abort", onAbort);
-        }
-      });
-    },
-    []
-  );
-
-  return { deviceId, ready, playUriAt, resume, pause, activate, waitForPlaybackStart };
+  return { deviceId, ready, playUriAt, resume, pause, activate };
 }
