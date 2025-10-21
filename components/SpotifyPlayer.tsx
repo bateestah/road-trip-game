@@ -10,8 +10,7 @@ export default function useSpotifyDevice() {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const playerRef = useRef<any>(null);
-  type PlaybackStartResolver = { resolve: () => void; uri?: string | null };
-  const playbackStartResolvers = useRef<PlaybackStartResolver[]>([]);
+  const playbackStartResolvers = useRef<Array<() => void>>([]);
 
   const getToken = useCallback(async (): Promise<string> => {
     const r = await fetch("/api/auth/token", { cache: "no-store" });
@@ -54,17 +53,11 @@ export default function useSpotifyDevice() {
       player.addListener("authentication_error", ({ message }: any) => console.error(message));
       player.addListener("account_error", ({ message }: any) => console.error(message));
 
-      player.addListener("player_state_changed", (state: any | null) => {
+      player.addListener("player_state_changed", (state: { paused: boolean } | null) => {
         if (!state) return;
         if (state.paused === false) {
-          const currentUri: string | null = state.track_window?.current_track?.uri ?? null;
-          playbackStartResolvers.current = playbackStartResolvers.current.filter(({ resolve, uri }) => {
-            if (uri && uri !== currentUri) {
-              return true;
-            }
-            resolve();
-            return false;
-          });
+          playbackStartResolvers.current.forEach((resolve) => resolve());
+          playbackStartResolvers.current = [];
         }
       });
 
@@ -72,26 +65,23 @@ export default function useSpotifyDevice() {
     };
 
     return () => {
-      playbackStartResolvers.current.forEach(({ resolve }) => resolve());
+      playbackStartResolvers.current.forEach((resolve) => resolve());
       playbackStartResolvers.current = [];
       playerRef.current?.disconnect?.();
     };
   }, [getToken]);
 
-  const waitForPlaybackStart = useCallback(async (expectedUri?: string | null) => {
+  const waitForPlaybackStart = useCallback(async () => {
     const player = playerRef.current;
     if (!player) return;
 
     const state = await player.getCurrentState?.();
     if (state && state.paused === false) {
-      const currentUri: string | null = state.track_window?.current_track?.uri ?? null;
-      if (!expectedUri || currentUri === expectedUri) {
-        return;
-      }
+      return;
     }
 
     await new Promise<void>((resolve) => {
-      playbackStartResolvers.current.push({ resolve, uri: expectedUri ?? null });
+      playbackStartResolvers.current.push(resolve);
     });
   }, []);
 

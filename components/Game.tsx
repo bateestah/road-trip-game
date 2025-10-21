@@ -90,9 +90,9 @@ export default function Game({ players }: { players: string[] }) {
     await ensureActivated();
     await playUriAt(current.uri, 0);
     clearPauseTimeout();
-    await waitForPlaybackStart(current.uri);
-    pauseTimeoutRef.current = window.setTimeout(async () => {
-      await pause();
+    await waitForPlaybackStart();
+    pauseTimeoutRef.current = window.setTimeout(() => {
+      pause();
       pauseTimeoutRef.current = null;
     }, 1000);
   }
@@ -102,10 +102,10 @@ export default function Game({ players }: { players: string[] }) {
     await ensureActivated();
     await resume();
     clearPauseTimeout();
-    await waitForPlaybackStart(current.uri);
+    await waitForPlaybackStart();
     setExtended(true);
-    pauseTimeoutRef.current = window.setTimeout(async () => {
-      await pause();
+    pauseTimeoutRef.current = window.setTimeout(() => {
+      pause();
       pauseTimeoutRef.current = null;
     }, 5000);
   }
