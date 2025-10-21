@@ -10,6 +10,7 @@ export default function useSpotifyDevice() {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const playerRef = useRef<any>(null);
+  const playbackStartResolvers = useRef<Array<() => void>>([]);
 
   const getToken = useCallback(async (): Promise<string> => {
     const r = await fetch("/api/auth/token", { cache: "no-store" });
@@ -52,11 +53,37 @@ export default function useSpotifyDevice() {
       player.addListener("authentication_error", ({ message }: any) => console.error(message));
       player.addListener("account_error", ({ message }: any) => console.error(message));
 
+      player.addListener("player_state_changed", (state: { paused: boolean } | null) => {
+        if (!state) return;
+        if (state.paused === false) {
+          playbackStartResolvers.current.forEach((resolve) => resolve());
+          playbackStartResolvers.current = [];
+        }
+      });
+
       await player.connect();
     };
 
-    return () => { playerRef.current?.disconnect?.(); };
+    return () => {
+      playbackStartResolvers.current.forEach((resolve) => resolve());
+      playbackStartResolvers.current = [];
+      playerRef.current?.disconnect?.();
+    };
   }, [getToken]);
+
+  const waitForPlaybackStart = useCallback(async () => {
+    const player = playerRef.current;
+    if (!player) return;
+
+    const state = await player.getCurrentState?.();
+    if (state && state.paused === false) {
+      return;
+    }
+
+    await new Promise<void>((resolve) => {
+      playbackStartResolvers.current.push(resolve);
+    });
+  }, []);
 
   const playUriAt = useCallback(async (uri: string, position_ms: number) => {
     if (!deviceId) return;
@@ -89,5 +116,5 @@ export default function useSpotifyDevice() {
     await playerRef.current?.activateElement?.();
   }, []);
 
-  return { deviceId, ready, playUriAt, resume, pause, activate };
+  return { deviceId, ready, playUriAt, resume, pause, activate, waitForPlaybackStart };
 }
