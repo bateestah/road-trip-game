@@ -25,7 +25,14 @@ export default function Game({ players }: { players: string[] }) {
   const [result, setResult] = useState<null | "correct" | "wrong">(null);
   const [lastTrackId, setLastTrackId] = useState<string | null>(null);
 
-  const { ready, activate, playUriAt, resume, pause, waitForPlaybackStart } = useSpotifyDevice();
+  const {
+    ready,
+    activate,
+    playUriAt,
+    resume: resumePlayback,
+    pause: pausePlayback,
+    waitForPlaybackStart,
+  } = useSpotifyDevice();
   const [sdkActivated, setSdkActivated] = useState(false);
   const pauseTimeoutRef = useRef<number | null>(null);
 
@@ -92,7 +99,7 @@ export default function Game({ players }: { players: string[] }) {
     clearPauseTimeout();
     await waitForPlaybackStart();
     pauseTimeoutRef.current = window.setTimeout(() => {
-      pause();
+      pausePlayback();
       pauseTimeoutRef.current = null;
     }, 1000);
   }
@@ -100,12 +107,12 @@ export default function Game({ players }: { players: string[] }) {
   async function extendFive() {
     if (!current?.uri || !ready) return;
     await ensureActivated();
-    await resume();
+    await resumePlayback();
     clearPauseTimeout();
     await waitForPlaybackStart();
     setExtended(true);
     pauseTimeoutRef.current = window.setTimeout(() => {
-      pause();
+      pausePlayback();
       pauseTimeoutRef.current = null;
     }, 5000);
   }
