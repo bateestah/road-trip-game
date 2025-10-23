@@ -95,6 +95,17 @@ export default function useSpotifyDevice() {
   }, [deviceId]);
 
   const resume = useCallback(async () => {
+    const player = playerRef.current;
+
+    if (player?.resume) {
+      try {
+        await player.resume();
+        return;
+      } catch (error) {
+        console.warn("Spotify Web Playback SDK resume failed, falling back to API", error);
+      }
+    }
+
     if (!deviceId) return;
     await fetch("/api/play", {
       method: "POST",
@@ -104,6 +115,17 @@ export default function useSpotifyDevice() {
   }, [deviceId]);
 
   const pause = useCallback(async () => {
+    const player = playerRef.current;
+
+    if (player?.pause) {
+      try {
+        await player.pause();
+        return;
+      } catch (error) {
+        console.warn("Spotify Web Playback SDK pause failed, falling back to API", error);
+      }
+    }
+
     if (!deviceId) return;
     await fetch("/api/pause", {
       method: "POST",
