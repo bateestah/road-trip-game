@@ -20,6 +20,10 @@ export default function Game({ players }: { players: string[] }) {
   const [current, setCurrent] = useState<Track | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [extended, setExtended] = useState(false);
+  const [queue, setQueue] = useState<Track[]>([]);
+  const queueRef = useRef<Track[]>([]);
+  const queueFetchInFlight = useRef(false);
+  const desiredQueueSize = 4;
 
   // NEW: track result and prevent immediate repeats
   const [result, setResult] = useState<null | "correct" | "wrong">(null);
@@ -45,12 +49,54 @@ export default function Game({ players }: { players: string[] }) {
   const [guessArtist, setGuessArtist] = useState("");
   const [guessSong, setGuessSong] = useState("");
 
-  async function ensureActivated() {
+  const ensureActivated = useCallback(async () => {
     if (!sdkActivated) {
       await activate();
       setSdkActivated(true);
     }
-  }
+  }, [activate, sdkActivated]);
+
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
+
+  const fetchBatch = useCallback(async (): Promise<Track[]> => {
+    if (!target) return [];
+    if (queueFetchInFlight.current) return [];
+    queueFetchInFlight.current = true;
+    try {
+      const r = await fetch("/api/random-track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...target, count: desiredQueueSize }),
+      });
+      if (!r.ok) return [];
+      const data = await r.json();
+      const incoming: Track[] = Array.isArray(data?.tracks) ? data.tracks : [];
+      const seenIds = new Set(queueRef.current.map((q) => q.id));
+      if (lastTrackId) {
+        seenIds.add(lastTrackId);
+      }
+      const filtered = incoming.filter((track) => track && !seenIds.has(track.id));
+      if (filtered.length > 0) return filtered;
+      return incoming.filter((track) => track && !queueRef.current.some((q) => q.id === track.id));
+    } catch {
+      return [];
+    } finally {
+      queueFetchInFlight.current = false;
+    }
+  }, [desiredQueueSize, lastTrackId, target]);
+
+  const ensurePrefetched = useCallback(async () => {
+    if (!target) return;
+    if (queueRef.current.length >= desiredQueueSize) return;
+    const newTracks = await fetchBatch();
+    if (newTracks.length) {
+      const updated = [...queueRef.current, ...newTracks];
+      queueRef.current = updated;
+      setQueue(updated);
+    }
+  }, [desiredQueueSize, fetchBatch, target]);
 
   const clearPauseTimeout = useCallback(() => {
     if (pauseTimeoutRef.current !== null) {
@@ -61,6 +107,30 @@ export default function Game({ players }: { players: string[] }) {
 
   useEffect(() => () => clearPauseTimeout(), [clearPauseTimeout]);
 
+  useEffect(() => {
+    if (ready) {
+      void ensureActivated();
+    }
+  }, [ensureActivated, ready]);
+
+  useEffect(() => {
+    queueRef.current = [];
+    setQueue([]);
+    setCurrent(null);
+    setLastTrackId(null);
+    queueFetchInFlight.current = false;
+    if (target) {
+      void ensurePrefetched();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
+
+  useEffect(() => {
+    if (target && queue.length < desiredQueueSize - 1) {
+      void ensurePrefetched();
+    }
+  }, [desiredQueueSize, ensurePrefetched, queue.length, target]);
+
   async function loadRandom() {
     if (!target) return;
     clearPauseTimeout();
@@ -69,27 +139,37 @@ export default function Game({ players }: { players: string[] }) {
     setGuessArtist("");
     setGuessSong("");
     setResult(null);
+    if (queueRef.current.length === 0) {
+      await ensurePrefetched();
+    }
 
-    let tries = 0;
-    let t: Track | null = null;
+    let workingQueue = queueRef.current;
+    if (workingQueue.length === 0) {
+      setCurrent(null);
+      return;
+    }
 
-    do {
-      const r = await fetch("/api/random-track", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(target),
-      });
-      if (!r.ok) {
-        setCurrent(null);
-        return;
-      }
-      t = await r.json();
-      tries++;
-      // Avoid same song twice in a row
-    } while (t && t.id && lastTrackId && t.id === lastTrackId && tries < 5);
+    let selectedIndex = workingQueue.findIndex((track) => track.id !== lastTrackId);
+    if (selectedIndex === -1) selectedIndex = 0;
+    const nextTrack = workingQueue[selectedIndex] ?? null;
+    if (!nextTrack) {
+      setCurrent(null);
+      return;
+    }
 
-    setCurrent(t);
-    if (t?.id) setLastTrackId(t.id);
+    const remaining = [
+      ...workingQueue.slice(0, selectedIndex),
+      ...workingQueue.slice(selectedIndex + 1),
+    ];
+    queueRef.current = remaining;
+    setQueue(remaining);
+
+    setCurrent(nextTrack);
+    if (nextTrack.id) setLastTrackId(nextTrack.id);
+
+    if (queueRef.current.length < desiredQueueSize - 1) {
+      void ensurePrefetched();
+    }
   }
 
   async function playInitial() {
