@@ -176,7 +176,6 @@ export default function Game({ players }: { players: string[] }) {
     if (!current?.uri || !ready) return;
     await ensureActivated();
     await playUriAt(current.uri, 0);
-    await resumePlayback();
     clearPauseTimeout();
     await waitForPlaybackStart();
     pauseTimeoutRef.current = window.setTimeout(() => {
