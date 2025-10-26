@@ -185,7 +185,7 @@ export default function Game({ players }: { players: string[] }) {
   async function playInitial() {
     if (!current?.uri || !ready) return;
     await ensureActivated();
-    await playUriAt(current.uri, 1000);
+    await playUriAt(current.uri, 0);
     await resumePlayback();
     clearPauseTimeout();
     await waitForPlaybackStart();
