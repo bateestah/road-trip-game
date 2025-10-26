@@ -22,7 +22,7 @@ export default function Game({ players }: { players: string[] }) {
   const [extended, setExtended] = useState(false);
   const [queue, setQueue] = useState<Track[]>([]);
   const queueRef = useRef<Track[]>([]);
-  const queueFetchInFlight = useRef(false);
+  const queueFetchInFlight = useRef<Promise<Track[]> | null>(null);
   const desiredQueueSize = 4;
 
   // NEW: track result and prevent immediate repeats
@@ -62,37 +62,47 @@ export default function Game({ players }: { players: string[] }) {
 
   const fetchBatch = useCallback(async (): Promise<Track[]> => {
     if (!target) return [];
-    if (queueFetchInFlight.current) return [];
-    queueFetchInFlight.current = true;
-    try {
-      const r = await fetch("/api/random-track", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...target, count: desiredQueueSize }),
-      });
-      if (!r.ok) return [];
-      const data = await r.json();
-      const incoming: Track[] = Array.isArray(data?.tracks) ? data.tracks : [];
-      const seenIds = new Set(queueRef.current.map((q) => q.id));
-      if (lastTrackId) {
-        seenIds.add(lastTrackId);
-      }
-      const filtered = incoming.filter((track) => track && !seenIds.has(track.id));
-      if (filtered.length > 0) return filtered;
-      return incoming.filter((track) => track && !queueRef.current.some((q) => q.id === track.id));
-    } catch {
-      return [];
-    } finally {
-      queueFetchInFlight.current = false;
+    if (queueFetchInFlight.current) {
+      return queueFetchInFlight.current;
     }
+
+    const pending = (async () => {
+      try {
+        const r = await fetch("/api/random-track", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...target, count: desiredQueueSize }),
+        });
+        if (!r.ok) return [];
+        const data = await r.json();
+        const incoming: Track[] = Array.isArray(data?.tracks) ? data.tracks : [];
+        const seenIds = new Set(queueRef.current.map((q) => q.id));
+        if (lastTrackId) {
+          seenIds.add(lastTrackId);
+        }
+        const filtered = incoming.filter((track) => track && !seenIds.has(track.id));
+        if (filtered.length > 0) return filtered;
+        return incoming.filter((track) => track && !queueRef.current.some((q) => q.id === track.id));
+      } catch {
+        return [];
+      } finally {
+        queueFetchInFlight.current = null;
+      }
+    })();
+
+    queueFetchInFlight.current = pending;
+    return pending;
   }, [desiredQueueSize, lastTrackId, target]);
 
   const ensurePrefetched = useCallback(async () => {
     if (!target) return;
     if (queueRef.current.length >= desiredQueueSize) return;
     const newTracks = await fetchBatch();
-    if (newTracks.length) {
-      const updated = [...queueRef.current, ...newTracks];
+    const deduped = newTracks.filter(
+      (track) => !queueRef.current.some((existing) => existing.id === track.id),
+    );
+    if (deduped.length) {
+      const updated = [...queueRef.current, ...deduped];
       queueRef.current = updated;
       setQueue(updated);
     }
@@ -118,7 +128,7 @@ export default function Game({ players }: { players: string[] }) {
     setQueue([]);
     setCurrent(null);
     setLastTrackId(null);
-    queueFetchInFlight.current = false;
+    queueFetchInFlight.current = null;
     if (target) {
       void ensurePrefetched();
     }
@@ -176,6 +186,7 @@ export default function Game({ players }: { players: string[] }) {
     if (!current?.uri || !ready) return;
     await ensureActivated();
     await playUriAt(current.uri, 0);
+    await resumePlayback();
     clearPauseTimeout();
     await waitForPlaybackStart();
     pauseTimeoutRef.current = window.setTimeout(() => {
