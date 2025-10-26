@@ -206,24 +206,35 @@ export default function useSpotifyDevice() {
     }
   }, []);
 
-  const playUriAt = useCallback(async (uri: string, position_ms: number) => {
-    if (!deviceId) return;
+  const playUriAt = useCallback(
+    async (
+      uri: string,
+      position_ms: number,
+      options: { restoreVolume?: boolean } = {},
+    ) => {
+      if (!deviceId) return;
 
-    await restoreVolume();
-    const url = new URL("https://api.spotify.com/v1/me/player/play");
-    url.searchParams.set("device_id", deviceId);
-    await callSpotifyJson(
-      url.toString(),
-      { uris: [uri], position_ms },
-      async () => {
-        await fetch("/api/play", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ device_id: deviceId, uri, position_ms })
-        });
+      const { restoreVolume: shouldRestoreVolume = true } = options;
+      if (shouldRestoreVolume) {
+        await restoreVolume();
       }
-    );
-  }, [callSpotifyJson, deviceId, restoreVolume]);
+
+      const url = new URL("https://api.spotify.com/v1/me/player/play");
+      url.searchParams.set("device_id", deviceId);
+      await callSpotifyJson(
+        url.toString(),
+        { uris: [uri], position_ms },
+        async () => {
+          await fetch("/api/play", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ device_id: deviceId, uri, position_ms })
+          });
+        }
+      );
+    },
+    [callSpotifyJson, deviceId, restoreVolume]
+  );
 
   const resume = useCallback(async () => {
     const player = playerRef.current;
@@ -257,11 +268,12 @@ export default function useSpotifyDevice() {
 
   const pause = useCallback(async () => {
     const player = playerRef.current;
+    const wasMuted = mutedRef.current;
 
     const muteForPause = async () => {
       if (!player?.setVolume) return;
       try {
-        if (player.getVolume) {
+        if (!wasMuted && player.getVolume) {
           const currentVolume = await player.getVolume();
           if (typeof currentVolume === "number") {
             rememberedVolumeRef.current = currentVolume;
@@ -324,9 +336,29 @@ export default function useSpotifyDevice() {
     await volumePromise;
   }, [callSpotifyPause, deviceId]);
 
+  const mute = useCallback(async () => {
+    const player = playerRef.current;
+    const wasMuted = mutedRef.current;
+
+    if (!player?.setVolume) return;
+
+    try {
+      if (!wasMuted && player.getVolume) {
+        const currentVolume = await player.getVolume();
+        if (typeof currentVolume === "number") {
+          rememberedVolumeRef.current = currentVolume;
+        }
+      }
+      await player.setVolume(0);
+      mutedRef.current = true;
+    } catch (error) {
+      console.warn("Spotify Web Playback SDK failed to mute", error);
+    }
+  }, []);
+
   const activate = useCallback(async () => {
     await playerRef.current?.activateElement?.();
   }, []);
 
-  return { deviceId, ready, playUriAt, resume, pause, activate, waitForPlaybackStart };
+  return { deviceId, ready, playUriAt, resume, pause, mute, activate, waitForPlaybackStart };
 }
