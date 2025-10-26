@@ -2,6 +2,8 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
+const SDK_PAUSE_TIMEOUT_MS = 4000;
+
 declare global {
   interface Window { onSpotifyWebPlaybackSDKReady?: () => void; Spotify?: any; }
 }
@@ -13,13 +15,102 @@ export default function useSpotifyDevice() {
   const playbackStartResolvers = useRef<Array<() => void>>([]);
   const rememberedVolumeRef = useRef(0.8);
   const mutedRef = useRef(false);
+  const tokenStateRef = useRef<{ accessToken: string; expiresAtMs: number } | null>(null);
+  const inflightTokenRef = useRef<Promise<string> | null>(null);
+
+  const invalidateToken = useCallback(() => {
+    tokenStateRef.current = null;
+  }, []);
 
   const getToken = useCallback(async (): Promise<string> => {
-    const r = await fetch("/api/auth/token", { cache: "no-store" });
-    if (!r.ok) throw new Error("no token");
-    const { access_token } = await r.json();
-    return access_token;
+    const now = Date.now();
+    const cached = tokenStateRef.current;
+    if (cached && cached.expiresAtMs - now > 60_000) {
+      return cached.accessToken;
+    }
+
+    if (!inflightTokenRef.current) {
+      inflightTokenRef.current = (async () => {
+        const r = await fetch("/api/auth/token", { cache: "no-store" });
+        if (!r.ok) {
+          inflightTokenRef.current = null;
+          throw new Error("no token");
+        }
+        const { access_token, expires_at } = await r.json();
+        const expiresAtMs = typeof expires_at === "number" ? expires_at * 1000 : now + 300_000;
+        tokenStateRef.current = { accessToken: access_token, expiresAtMs };
+        inflightTokenRef.current = null;
+        return access_token;
+      })().catch((error) => {
+        inflightTokenRef.current = null;
+        throw error;
+      });
+    }
+
+    return inflightTokenRef.current;
   }, []);
+
+  const fetchSpotify = useCallback(
+    async (input: string, init: RequestInit = {}, retry = true): Promise<Response> => {
+      const token = await getToken();
+      const headers = new Headers(init.headers ?? {});
+      headers.set("Authorization", `Bearer ${token}`);
+      const finalInit: RequestInit = { ...init, headers };
+
+      try {
+        const response = await fetch(input, finalInit);
+        if ((response.status === 401 || response.status === 403) && retry) {
+          invalidateToken();
+          return fetchSpotify(input, init, false);
+        }
+        return response;
+      } catch (error) {
+        if (retry) {
+          invalidateToken();
+        }
+        throw error;
+      }
+    },
+    [getToken, invalidateToken]
+  );
+
+  const callSpotifyJson = useCallback(
+    async (input: string, body: Record<string, unknown> | null, fallback: () => Promise<void>) => {
+      try {
+        const response = await fetchSpotify(input, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        if (!response.ok && response.status !== 204) {
+          throw new Error(`Spotify request failed with status ${response.status}`);
+        }
+      } catch (error) {
+        console.warn("Spotify Web API request failed, falling back to Next.js API", error);
+        await fallback();
+      }
+    },
+    [fetchSpotify]
+  );
+
+  const callSpotifyPause = useCallback(
+    async (device_id: string | undefined, fallback: () => Promise<void>) => {
+      try {
+        const url = new URL("https://api.spotify.com/v1/me/player/pause");
+        if (device_id) {
+          url.searchParams.set("device_id", device_id);
+        }
+        const response = await fetchSpotify(url.toString(), { method: "PUT" });
+        if (!response.ok && response.status !== 204) {
+          throw new Error(`Spotify pause failed with status ${response.status}`);
+        }
+      } catch (error) {
+        console.warn("Spotify pause via Web API failed, falling back to Next.js API", error);
+        await fallback();
+      }
+    },
+    [fetchSpotify]
+  );
 
   useEffect(() => {
     const id = "spotify-player";
@@ -46,14 +137,20 @@ export default function useSpotifyDevice() {
         console.warn("Unable to initialize Spotify player volume", error);
       }
 
-      player.addListener("ready", ({ device_id }: { device_id: string }) => {
+      player.addListener("ready", async ({ device_id }: { device_id: string }) => {
         setDeviceId(device_id);
         setReady(true);
-        fetch("/api/transfer", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ device_id })
-        });
+        await callSpotifyJson(
+          "https://api.spotify.com/v1/me/player",
+          { device_ids: [device_id], play: false },
+          async () => {
+            await fetch("/api/transfer", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ device_id })
+            });
+          }
+        );
       });
 
       player.addListener("not_ready", () => setReady(false));
@@ -113,12 +210,20 @@ export default function useSpotifyDevice() {
     if (!deviceId) return;
 
     await restoreVolume();
-    await fetch("/api/play", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ device_id: deviceId, uri, position_ms })
-    });
-  }, [deviceId, restoreVolume]);
+    const url = new URL("https://api.spotify.com/v1/me/player/play");
+    url.searchParams.set("device_id", deviceId);
+    await callSpotifyJson(
+      url.toString(),
+      { uris: [uri], position_ms },
+      async () => {
+        await fetch("/api/play", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ device_id: deviceId, uri, position_ms })
+        });
+      }
+    );
+  }, [callSpotifyJson, deviceId, restoreVolume]);
 
   const resume = useCallback(async () => {
     const player = playerRef.current;
@@ -135,12 +240,20 @@ export default function useSpotifyDevice() {
     }
 
     if (!deviceId) return;
-    await fetch("/api/play", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ device_id: deviceId })
-    });
-  }, [deviceId, restoreVolume]);
+    const url = new URL("https://api.spotify.com/v1/me/player/play");
+    url.searchParams.set("device_id", deviceId);
+    await callSpotifyJson(
+      url.toString(),
+      {},
+      async () => {
+        await fetch("/api/play", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ device_id: deviceId })
+        });
+      }
+    );
+  }, [callSpotifyJson, deviceId, restoreVolume]);
 
   const pause = useCallback(async () => {
     const player = playerRef.current;
@@ -167,7 +280,7 @@ export default function useSpotifyDevice() {
     let lastError: unknown = null;
 
     if (player?.pause) {
-      const deadline = performance.now() + 1500;
+      const deadline = performance.now() + SDK_PAUSE_TIMEOUT_MS;
 
       while (performance.now() < deadline) {
         try {
@@ -200,14 +313,16 @@ export default function useSpotifyDevice() {
       return;
     }
 
-    await fetch("/api/pause", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ device_id: deviceId })
+    await callSpotifyPause(deviceId, async () => {
+      await fetch("/api/pause", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device_id: deviceId })
+      });
     });
 
     await volumePromise;
-  }, [deviceId]);
+  }, [callSpotifyPause, deviceId]);
 
   const activate = useCallback(async () => {
     await playerRef.current?.activateElement?.();

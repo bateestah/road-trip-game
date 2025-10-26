@@ -34,32 +34,54 @@ export async function listGenres(token: SpotifyToken, q: string) {
   return all.filter(g => g.toLowerCase().includes(needle)).slice(0, 20);
 }
 
-export async function randomTrackByArtist(token: SpotifyToken, artistId: string) {
-  const top = await sp<any>(token, `artists/${artistId}/top-tracks`, { market: "US" });
-  const albums = await sp<any>(token, `artists/${artistId}/albums`, { include_groups: "album,single,compilation,appears_on", market: "US", limit: "10" });
+export async function randomTracksByArtist(token: SpotifyToken, artistId: string, count = 1) {
+  const [top, albums] = await Promise.all([
+    sp<any>(token, `artists/${artistId}/top-tracks`, { market: "US" }),
+    sp<any>(token, `artists/${artistId}/albums`, {
+      include_groups: "album,single,compilation,appears_on",
+      market: "US",
+      limit: "10",
+    }),
+  ]);
 
-  const albumIds = Array.from(new Set(albums.items.map((a:any)=>a.id)));
+  const albumIds = Array.from(new Set((albums.items ?? []).map((a: any) => a.id))).slice(0, 8);
+  const albumDetails = await Promise.all(
+    albumIds.map(async (id) => {
+      try {
+        return await sp<any>(token, `albums/${id}`, { market: "US" });
+      } catch {
+        return null;
+      }
+    })
+  );
+
   const tracks: any[] = [...(top.tracks ?? [])];
-  for (const id of albumIds) {
-    const a = await sp<any>(token, `albums/${id}`, { market: "US" });
-    tracks.push(...(a.tracks.items ?? []).map((t:any)=>({ ...t, album: a })));
-  }
+  albumDetails
+    .filter(Boolean)
+    .forEach((album: any) => {
+      tracks.push(...(album.tracks?.items ?? []).map((t: any) => ({ ...t, album })));
+    });
 
-  return pickAnyPlayable(tracks);
+  return pickPlayable(tracks, count);
 }
 
-export async function randomTrackByGenre(token: SpotifyToken, genre: string) {
-  const res = await sp<any>(token, "search", { q: `genre:"${genre}"`, type: "track", market: "US", limit: "50" });
-  return pickAnyPlayable(res.tracks.items);
+export async function randomTracksByGenre(token: SpotifyToken, genre: string, count = 1) {
+  const res = await sp<any>(token, "search", {
+    q: `genre:"${genre}"`,
+    type: "track",
+    market: "US",
+    limit: "50",
+  });
+  return pickPlayable(res.tracks.items, count);
 }
 
-export async function randomTrackFromPlaylist(token: SpotifyToken, playlistId: string) {
+export async function randomTracksFromPlaylist(token: SpotifyToken, playlistId: string, count = 1) {
   const res = await sp<any>(token, `playlists/${playlistId}/tracks`, { market: "US", limit: "100" });
   const tracks = res.items.map((i:any)=> i.track).filter(Boolean);
-  return pickAnyPlayable(tracks);
+  return pickPlayable(tracks, count);
 }
 
-function pickAnyPlayable(tracks: any[]) {
+function pickPlayable(tracks: any[], count: number) {
   const ordered = shuffle(
     (tracks ?? []).filter((t: any) => {
       if (!t) return false;
@@ -70,17 +92,18 @@ function pickAnyPlayable(tracks: any[]) {
       return true;
     })
   );
-  const t = ordered[0];
-  if (!t) return null;
-  const artwork = t.album?.images?.[1]?.url ?? t.album?.images?.[0]?.url ?? null;
-  return {
-    id: t.id,
-    uri: t.uri,
-    name: t.name,
-    artists: (t.artists || []).map((a:any)=>a.name),
-    external_url: t.external_urls?.spotify ?? "",
-    artwork
-  };
+
+  return ordered.slice(0, count).map((t: any) => {
+    const artwork = t.album?.images?.[1]?.url ?? t.album?.images?.[0]?.url ?? null;
+    return {
+      id: t.id,
+      uri: t.uri,
+      name: t.name,
+      artists: (t.artists || []).map((a:any)=>a.name),
+      external_url: t.external_urls?.spotify ?? "",
+      artwork
+    };
+  });
 }
 
 // Playback control helpers
