@@ -1,20 +1,25 @@
 import { NextResponse } from "next/server";
 import { getFreshSession } from "@/lib/session";
-import { randomTrackByArtist, randomTrackByGenre, randomTrackFromPlaylist } from "@/lib/spotify";
+import { randomTracksByArtist, randomTracksByGenre, randomTracksFromPlaylist } from "@/lib/spotify";
 
 export async function POST(req: Request) {
   const session = await getFreshSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const body = await req.json();
 
-  try {
-    let track = null;
-    if (body.type === "artist") track = await randomTrackByArtist(session, body.id);
-    if (body.type === "genre") track = await randomTrackByGenre(session, body.name);
-    if (body.type === "playlist") track = await randomTrackFromPlaylist(session, body.id);
+  const requestedCount = typeof body.count === "number" ? body.count : Number(body.count);
+  const count = Number.isFinite(requestedCount)
+    ? Math.max(1, Math.min(10, Math.floor(requestedCount)))
+    : 1;
 
-    return NextResponse.json(track ?? null);
+  try {
+    let tracks: any[] = [];
+    if (body.type === "artist") tracks = await randomTracksByArtist(session, body.id, count);
+    if (body.type === "genre") tracks = await randomTracksByGenre(session, body.name, count);
+    if (body.type === "playlist") tracks = await randomTracksFromPlaylist(session, body.id, count);
+
+    return NextResponse.json({ tracks });
   } catch (e) {
-    return NextResponse.json(null, { status: 200 });
+    return NextResponse.json({ tracks: [] }, { status: 200 });
   }
 }
