@@ -22,7 +22,7 @@ export default function Game({ players }: { players: string[] }) {
   const [extended, setExtended] = useState(false);
   const [queue, setQueue] = useState<Track[]>([]);
   const queueRef = useRef<Track[]>([]);
-  const queueFetchPromiseRef = useRef<Promise<Track[]> | null>(null);
+  const queueFetchInFlight = useRef(false);
   const desiredQueueSize = 4;
 
   // NEW: track result and prevent immediate repeats
@@ -62,34 +62,29 @@ export default function Game({ players }: { players: string[] }) {
 
   const fetchBatch = useCallback(async (): Promise<Track[]> => {
     if (!target) return [];
-
-    if (!queueFetchPromiseRef.current) {
-      queueFetchPromiseRef.current = (async () => {
-        try {
-          const r = await fetch("/api/random-track", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...target, count: desiredQueueSize }),
-          });
-          if (!r.ok) return [];
-          const data = await r.json();
-          const incoming: Track[] = Array.isArray(data?.tracks) ? data.tracks : [];
-          const seenIds = new Set(queueRef.current.map((q) => q.id));
-          if (lastTrackId) {
-            seenIds.add(lastTrackId);
-          }
-          const filtered = incoming.filter((track) => track && !seenIds.has(track.id));
-          if (filtered.length > 0) return filtered;
-          return incoming.filter((track) => track && !queueRef.current.some((q) => q.id === track.id));
-        } catch {
-          return [];
-        } finally {
-          queueFetchPromiseRef.current = null;
-        }
-      })();
+    if (queueFetchInFlight.current) return [];
+    queueFetchInFlight.current = true;
+    try {
+      const r = await fetch("/api/random-track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...target, count: desiredQueueSize }),
+      });
+      if (!r.ok) return [];
+      const data = await r.json();
+      const incoming: Track[] = Array.isArray(data?.tracks) ? data.tracks : [];
+      const seenIds = new Set(queueRef.current.map((q) => q.id));
+      if (lastTrackId) {
+        seenIds.add(lastTrackId);
+      }
+      const filtered = incoming.filter((track) => track && !seenIds.has(track.id));
+      if (filtered.length > 0) return filtered;
+      return incoming.filter((track) => track && !queueRef.current.some((q) => q.id === track.id));
+    } catch {
+      return [];
+    } finally {
+      queueFetchInFlight.current = false;
     }
-
-    return queueFetchPromiseRef.current ?? Promise.resolve([]);
   }, [desiredQueueSize, lastTrackId, target]);
 
   const ensurePrefetched = useCallback(async () => {
@@ -97,18 +92,9 @@ export default function Game({ players }: { players: string[] }) {
     if (queueRef.current.length >= desiredQueueSize) return;
     const newTracks = await fetchBatch();
     if (newTracks.length) {
-      const existingIds = new Set(queueRef.current.map((q) => q.id));
-      const updated = [...queueRef.current];
-      newTracks.forEach((track) => {
-        if (track && !existingIds.has(track.id)) {
-          existingIds.add(track.id);
-          updated.push(track);
-        }
-      });
-      if (updated.length !== queueRef.current.length) {
-        queueRef.current = updated;
-        setQueue(updated);
-      }
+      const updated = [...queueRef.current, ...newTracks];
+      queueRef.current = updated;
+      setQueue(updated);
     }
   }, [desiredQueueSize, fetchBatch, target]);
 
@@ -132,7 +118,7 @@ export default function Game({ players }: { players: string[] }) {
     setQueue([]);
     setCurrent(null);
     setLastTrackId(null);
-    queueFetchPromiseRef.current = null;
+    queueFetchInFlight.current = false;
     if (target) {
       void ensurePrefetched();
     }
@@ -158,26 +144,6 @@ export default function Game({ players }: { players: string[] }) {
     }
 
     let workingQueue = queueRef.current;
-    if (workingQueue.length === 0) {
-      // Try one more fetch in case the first attempt resolved with duplicates
-      const newTracks = await fetchBatch();
-      if (newTracks.length) {
-        const existingIds = new Set(queueRef.current.map((q) => q.id));
-        const updated = [...queueRef.current];
-        newTracks.forEach((track) => {
-          if (track && !existingIds.has(track.id)) {
-            existingIds.add(track.id);
-            updated.push(track);
-          }
-        });
-        if (updated.length) {
-          queueRef.current = updated;
-          setQueue(updated);
-          workingQueue = updated;
-        }
-      }
-    }
-
     if (workingQueue.length === 0) {
       setCurrent(null);
       return;
