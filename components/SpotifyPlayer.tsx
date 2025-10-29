@@ -290,7 +290,7 @@ export default function useSpotifyDevice() {
         }
 
         const state = await player.getCurrentState?.();
-        if (!state || state.paused) {
+        if (state?.paused) {
           sdkPauseSucceeded = true;
           break;
         }
