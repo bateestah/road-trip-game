@@ -255,7 +255,7 @@ export default function useSpotifyDevice() {
     );
   }, [callSpotifyJson, deviceId, restoreVolume]);
 
-  const pause = useCallback(async () => {
+  const pause = useCallback(async (): Promise<boolean> => {
     const player = playerRef.current;
 
     const muteForPause = async () => {
@@ -276,52 +276,79 @@ export default function useSpotifyDevice() {
 
     const volumePromise = muteForPause();
 
-    let sdkPauseSucceeded = false;
-    let lastError: unknown = null;
+    const waitForPauseConfirmation = async (): Promise<boolean> => {
+      if (!player?.getCurrentState) {
+        return true;
+      }
 
-    if (player?.pause) {
       const deadline = performance.now() + SDK_PAUSE_TIMEOUT_MS;
-
       while (performance.now() < deadline) {
-        try {
-          await player.pause();
-        } catch (error) {
-          lastError = error;
+        const state = await player.getCurrentState();
+        if (!state || state.paused) {
+          return true;
         }
-
-        const state = await player.getCurrentState?.();
-        if (state?.paused) {
-          sdkPauseSucceeded = true;
-          break;
-        }
-
         await new Promise((resolve) => window.setTimeout(resolve, 60));
       }
 
-      if (!sdkPauseSucceeded) {
-        console.warn("Spotify Web Playback SDK pause timed out, falling back to API", lastError);
+      return false;
+    };
+
+    try {
+      let lastError: unknown = null;
+
+      if (player?.pause) {
+        const deadline = performance.now() + SDK_PAUSE_TIMEOUT_MS;
+
+        while (performance.now() < deadline) {
+          try {
+            await player.pause();
+          } catch (error) {
+            lastError = error;
+          }
+
+          const state = await player.getCurrentState?.();
+          if (!state || state.paused) {
+            break;
+          }
+
+          await new Promise((resolve) => window.setTimeout(resolve, 60));
+        }
+
+        const sdkConfirmed = await waitForPauseConfirmation();
+        if (sdkConfirmed) {
+          return true;
+        }
+
+        console.warn(
+          "Spotify Web Playback SDK pause timed out, falling back to API",
+          lastError
+        );
       }
-    }
 
-    if (sdkPauseSucceeded) {
-      await volumePromise;
-      return;
-    }
+      if (!deviceId) {
+        return waitForPauseConfirmation();
+      }
 
-    if (!deviceId) {
-      await volumePromise;
-      return;
-    }
+      await callSpotifyPause(deviceId, async () => {
+        const response = await fetch("/api/pause", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ device_id: deviceId })
+        });
 
-    await callSpotifyPause(deviceId, async () => {
-      await fetch("/api/pause", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ device_id: deviceId })
+        if (!response.ok) {
+          throw new Error(`/api/pause failed with status ${response.status}`);
+        }
       });
-    });
 
-    await volumePromise;
+      const apiConfirmed = await waitForPauseConfirmation();
+      if (!apiConfirmed) {
+        console.warn("Spotify pause confirmation timed out after Web API fallback");
+      }
+      return apiConfirmed;
+    } finally {
+      await volumePromise;
+    }
   }, [callSpotifyPause, deviceId]);
 
   const activate = useCallback(async () => {
