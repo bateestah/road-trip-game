@@ -107,7 +107,11 @@ export default function SearchBox({ onPick }: { onPick: (t: SearchTarget) => voi
             <li
               key={r.id}
               className="p-3 hover:bg-gray-700 cursor-pointer"
-              onClick={() => onPick({ type: "artist", id: r.id, name: r.name })}
+              onClick={() => {
+                onPick({ type: "artist", id: r.id, name: r.name });
+                setQ("");
+                setArtistResults([]);
+              }}
             >
               {r.name}
             </li>
@@ -117,7 +121,11 @@ export default function SearchBox({ onPick }: { onPick: (t: SearchTarget) => voi
             <li
               key={r.id}
               className="p-3 hover:bg-gray-700 cursor-pointer"
-              onClick={() => onPick({ type: "playlist", id: r.id, name: r.name })}
+              onClick={() => {
+                onPick({ type: "playlist", id: r.id, name: r.name });
+                setQ("");
+                setPlaylistResults([]);
+              }}
             >
               {r.name}
             </li>
@@ -127,7 +135,11 @@ export default function SearchBox({ onPick }: { onPick: (t: SearchTarget) => voi
             <li
               key={g}
               className="p-3 hover:bg-gray-700 cursor-pointer"
-              onClick={() => onPick({ type: "genre", name: g })}
+              onClick={() => {
+                onPick({ type: "genre", name: g });
+                setQ("");
+                setGenreResults([]);
+              }}
             >
               {g}
             </li>
