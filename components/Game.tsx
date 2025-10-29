@@ -310,8 +310,7 @@ export default function Game({ players }: { players: string[] }) {
                   <img
                     src={current.artwork}
                     alt=""
-                    className="h-16 w-16 rounded object-cover"
-                    style={{ imageRendering: "pixelated" }}
+                    className="h-16 w-16 rounded object-cover filter blur-sm"
                   />
                 )}
                 <div className="text-sm text-gray-300">
