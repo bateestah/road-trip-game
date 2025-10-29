@@ -191,8 +191,16 @@ export default function Game({ players }: { players: string[] }) {
     await playUriAt(current.uri, 0);
     await resumePlayback();
     await waitForPlaybackStart();
-    await pausePlayback();
-    setPrimed(true);
+    try {
+      const paused = await pausePlayback();
+      if (!paused) {
+        console.warn("Unable to prime track: playback never paused");
+        return;
+      }
+      setPrimed(true);
+    } catch (error) {
+      console.warn("Unable to prime track: pause request failed", error);
+    }
   }
 
   async function playInitial() {
@@ -202,8 +210,18 @@ export default function Game({ players }: { players: string[] }) {
     clearPauseTimeout();
     await waitForPlaybackStart();
     pauseTimeoutRef.current = window.setTimeout(() => {
-      pausePlayback();
-      pauseTimeoutRef.current = null;
+      void pausePlayback()
+        .then((paused) => {
+          if (!paused) {
+            console.warn("Timed pause after 1s did not confirm");
+          }
+        })
+        .catch((error) => {
+          console.warn("Timed pause after 1s failed", error);
+        })
+        .finally(() => {
+          pauseTimeoutRef.current = null;
+        });
     }, 1000);
   }
 
@@ -215,8 +233,18 @@ export default function Game({ players }: { players: string[] }) {
     await waitForPlaybackStart();
     setExtended(true);
     pauseTimeoutRef.current = window.setTimeout(() => {
-      pausePlayback();
-      pauseTimeoutRef.current = null;
+      void pausePlayback()
+        .then((paused) => {
+          if (!paused) {
+            console.warn("Timed pause after 5s did not confirm");
+          }
+        })
+        .catch((error) => {
+          console.warn("Timed pause after 5s failed", error);
+        })
+        .finally(() => {
+          pauseTimeoutRef.current = null;
+        });
     }, 5000);
   }
 
