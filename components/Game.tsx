@@ -28,6 +28,7 @@ export default function Game({ players }: { players: string[] }) {
   // NEW: track result and prevent immediate repeats
   const [result, setResult] = useState<null | "correct" | "wrong">(null);
   const [lastTrackId, setLastTrackId] = useState<string | null>(null);
+  const [primed, setPrimed] = useState(false);
 
   const {
     ready,
@@ -149,6 +150,7 @@ export default function Game({ players }: { players: string[] }) {
     setGuessArtist("");
     setGuessSong("");
     setResult(null);
+    setPrimed(false);
     if (queueRef.current.length === 0) {
       await ensurePrefetched();
     }
@@ -182,10 +184,20 @@ export default function Game({ players }: { players: string[] }) {
     }
   }
 
+  async function primeCurrentTrack() {
+    if (!current?.uri || !ready) return;
+    await ensureActivated();
+    clearPauseTimeout();
+    await playUriAt(current.uri, 0);
+    await resumePlayback();
+    await waitForPlaybackStart();
+    await pausePlayback();
+    setPrimed(true);
+  }
+
   async function playInitial() {
     if (!current?.uri || !ready) return;
     await ensureActivated();
-    await playUriAt(current.uri, 0);
     await resumePlayback();
     clearPauseTimeout();
     await waitForPlaybackStart();
@@ -263,9 +275,16 @@ export default function Game({ players }: { players: string[] }) {
                 New random
               </button>
               <button
+                className="rounded border border-gray-600 px-3 py-1 text-gray-100"
+                onClick={primeCurrentTrack}
+                disabled={!current?.uri || !ready}
+              >
+                Load song
+              </button>
+              <button
                 className="rounded bg-emerald-600 text-white px-3 py-1"
                 onClick={playInitial}
-                disabled={!current?.uri || !ready}
+                disabled={!current?.uri || !ready || !primed}
               >
                 Play 1s
               </button>
