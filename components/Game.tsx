@@ -35,13 +35,10 @@ export default function Game({ players }: { players: string[] }) {
     playUriAt,
     resume: resumePlayback,
     pause: pausePlayback,
-    mute,
     waitForPlaybackStart,
   } = useSpotifyDevice();
   const [sdkActivated, setSdkActivated] = useState(false);
   const pauseTimeoutRef = useRef<number | null>(null);
-  const hasPrimedRef = useRef(false);
-  const currentRef = useRef<Track | null>(null);
 
   const nextTurn = () => setTurnIndex((i) => (i + 1) % players.length);
 
@@ -62,13 +59,6 @@ export default function Game({ players }: { players: string[] }) {
   useEffect(() => {
     queueRef.current = queue;
   }, [queue]);
-
-  useEffect(() => {
-    currentRef.current = current;
-    if (!current) {
-      hasPrimedRef.current = false;
-    }
-  }, [current]);
 
   const fetchBatch = useCallback(async (): Promise<Track[]> => {
     if (!target) return [];
@@ -126,9 +116,6 @@ export default function Game({ players }: { players: string[] }) {
   }, []);
 
   useEffect(() => () => clearPauseTimeout(), [clearPauseTimeout]);
-  useEffect(() => () => {
-    hasPrimedRef.current = false;
-  }, []);
 
   useEffect(() => {
     if (ready) {
@@ -140,7 +127,6 @@ export default function Game({ players }: { players: string[] }) {
     queueRef.current = [];
     setQueue([]);
     setCurrent(null);
-    hasPrimedRef.current = false;
     setLastTrackId(null);
     queueFetchInFlight.current = null;
     if (target) {
@@ -158,7 +144,6 @@ export default function Game({ players }: { players: string[] }) {
   async function loadRandom() {
     if (!target) return;
     clearPauseTimeout();
-    hasPrimedRef.current = false;
     setRevealed(false);
     setExtended(false);
     setGuessArtist("");
@@ -171,7 +156,6 @@ export default function Game({ players }: { players: string[] }) {
     let workingQueue = queueRef.current;
     if (workingQueue.length === 0) {
       setCurrent(null);
-      hasPrimedRef.current = false;
       return;
     }
 
@@ -180,7 +164,6 @@ export default function Game({ players }: { players: string[] }) {
     const nextTrack = workingQueue[selectedIndex] ?? null;
     if (!nextTrack) {
       setCurrent(null);
-      hasPrimedRef.current = false;
       return;
     }
 
@@ -192,49 +175,18 @@ export default function Game({ players }: { players: string[] }) {
     setQueue(remaining);
 
     setCurrent(nextTrack);
-    hasPrimedRef.current = false;
     if (nextTrack.id) setLastTrackId(nextTrack.id);
 
     if (queueRef.current.length < desiredQueueSize - 1) {
       void ensurePrefetched();
     }
-
-    const trackId = nextTrack.id;
-    const trackUri = nextTrack.uri;
-    void (async () => {
-      try {
-        await ensureActivated();
-        if (currentRef.current?.id !== trackId) return;
-
-        await mute();
-        if (currentRef.current?.id !== trackId) return;
-
-        await playUriAt(trackUri, 0, { restoreVolume: false });
-        if (currentRef.current?.id !== trackId) return;
-
-        await waitForPlaybackStart();
-        if (currentRef.current?.id !== trackId) return;
-
-        await pausePlayback();
-        if (currentRef.current?.id !== trackId) return;
-
-        hasPrimedRef.current = true;
-      } catch (error) {
-        console.warn("Failed to prime Spotify track", error);
-        hasPrimedRef.current = false;
-      }
-    })();
   }
 
   async function playInitial() {
     if (!current?.uri || !ready) return;
     await ensureActivated();
-    if (hasPrimedRef.current) {
-      await resumePlayback();
-    } else {
-      await playUriAt(current.uri, 0);
-      await resumePlayback();
-    }
+    await playUriAt(current.uri, 0);
+    await resumePlayback();
     clearPauseTimeout();
     await waitForPlaybackStart();
     pauseTimeoutRef.current = window.setTimeout(() => {
