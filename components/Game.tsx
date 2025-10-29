@@ -270,17 +270,20 @@ export default function Game({ players }: { players: string[] }) {
                 </b>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-start">
               <button className="rounded border border-gray-600 px-3 py-1 text-gray-100" onClick={loadRandom}>
                 New random
               </button>
-              <button
-                className="rounded border border-gray-600 px-3 py-1 text-gray-100"
-                onClick={primeCurrentTrack}
-                disabled={!current?.uri || !ready}
-              >
-                Load song
-              </button>
+              <div className="flex flex-col items-center">
+                <button
+                  className="rounded border border-gray-600 px-3 py-1 text-gray-100"
+                  onClick={primeCurrentTrack}
+                  disabled={!current?.uri || !ready}
+                >
+                  Load song
+                </button>
+                {primed && <span className="mt-1 text-[10px] uppercase tracking-wide text-emerald-400">song is primed</span>}
+              </div>
               <button
                 className="rounded bg-emerald-600 text-white px-3 py-1"
                 onClick={playInitial}
@@ -303,7 +306,14 @@ export default function Game({ players }: { players: string[] }) {
           {current && (
             <>
               <div className="flex items-center gap-3">
-                {current.artwork && <img src={current.artwork} alt="" className="h-16 w-16 rounded" />}
+                {current.artwork && (
+                  <img
+                    src={current.artwork}
+                    alt=""
+                    className="h-16 w-16 rounded object-cover"
+                    style={{ imageRendering: "pixelated" }}
+                  />
+                )}
                 <div className="text-sm text-gray-300">
                   Guess the <b>artist</b> and <b>song</b> name.
                 </div>
